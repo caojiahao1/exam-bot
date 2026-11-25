@@ -98,6 +98,13 @@ exam-bot/
 └── data/bank.sqlite3         题库
 ```
 
+
+## 资源
+
+- 题库 `data/bank.sqlite3`：761 条（单选 392 / 判断 237 / 多选 132）
+- 运行时零第三方依赖，`pip install -r requirements.txt` 只是占位
+- 题库指纹：题干归一化后取字符二元组，Jaccard ≥ 0.85 才采信（`engine.py` 的 `STRICT_MIN`）
+
 ## 环境要求
 
 - Python 3.8+（只用标准库，**无需 pip install**）

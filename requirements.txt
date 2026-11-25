@@ -1,0 +1,5 @@
+# exam-bot 只用 Python 标准库，无需第三方依赖。
+# 这份文件存在是为了让 `pip install -r requirements.txt` 不报错，
+# 也方便 Tools like Dependabot 识别项目类型。
+#
+# 运行环境：Python 3.8+，以及本机已安装 Edge 或 Chrome 之一。
