@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>exam-bot 控制台</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a21;--line:#262a33;--fg:#e6e8ec;--dim:#8b93a1;
+        --acc:#4ea1ff;--ok:#3ecf8e;--warn:#f5a623;--bad:#ef5350}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:18px;margin:0 0 4px;font-weight:600}
+  h1 small{color:var(--dim);font-size:12px;font-weight:400;margin-left:8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .card h2{font-size:13px;margin:0 0 10px;color:var(--dim);font-weight:600;letter-spacing:.5px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{background:#2a2f3a;color:var(--fg);border:1px solid var(--line);border-radius:8px;
+         padding:9px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+  button:hover{background:#333a47;border-color:#3a4250}
+  button.primary{background:#1b5f9e;border-color:#2b7cc8;color:#fff;font-weight:600}
+  button.primary:hover{background:#2273bd}
+  button.warn{background:#5a3f12;border-color:#8a6420;color:#f0c67a}
+  button.danger{background:#4a1f1f;border-color:#7a3232;color:#ffb3b3}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .kv{display:grid;grid-template-columns:92px 1fr;gap:4px 10px;font-size:13px}
+  .kv b{color:var(--dim);font-weight:400}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .ok{background:var(--ok)} .bad{background:var(--bad)} .idle{background:#5d6572}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#9fb3c8;word-break:break-all}
+  #log{background:#0b0d11;border:1px solid var(--line);border-radius:8px;padding:10px;
+       height:260px;overflow:auto;font:12px/1.6 ui-monospace,Consolas,monospace;color:#9ad;white-space:pre-wrap}
+  .steps{counter-reset:s}
+  .step{position:relative;padding-left:26px;margin-bottom:8px;color:var(--dim);font-size:13px}
+  .step:before{counter-increment:s;content:counter(s);position:absolute;left:0;top:1px;
+       width:18px;height:18px;border-radius:50%;background:#232833;color:#8b93a1;
+       font-size:11px;line-height:18px;text-align:center}
+  .step.done{color:#cfe8d8}
+  .step.done:before{background:#1e5c3f;color:#8ff0c4;content:"✓"}
+  .hint{color:var(--dim);font-size:12px;margin-top:6px}
+  select{background:#0b0d11;border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:8px;font-family:inherit;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>exam-bot <small>开卷答题助手 · 本地运行，不装插件</small></h1>
+
+  <div class="card">
+    <h2>状态</h2>
+    <div class="kv">
+      <b>题库</b><span id="s-rows">—</span>
+      <b>浏览器</b><span id="s-browser"><span class="dot idle"></span>未检测</span>
+      <b>当前页面</b><span id="s-page" class="mono">—</span>
+      <b>注入状态</b><span id="s-inject"><span class="dot idle"></span>—</span>
+      <b>答题进度</b><span id="s-progress">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>操作</h2>
+    <div class="steps" style="margin-bottom:12px">
+      <div class="step" id="st1">点「启动浏览器」，弹出的窗口里登录考试网站</div>
+      <div class="step" id="st2">在同一个窗口打开考试/练习页面（有题目的那页）</div>
+      <div class="step" id="st3">点「注入脚本」，看到"题目块 N 个"就绪</div>
+      <div class="step" id="st4">点「自动答题」，交卷仍由你手动点</div>
+    </div>
+
+    <div class="row" style="margin-bottom:10px">
+      <button class="primary" id="b-start">① 启动浏览器</button>
+      <button id="b-inject">② 注入脚本</button>
+      <button id="b-diag">诊断</button>
+      <button id="b-close">关闭浏览器</button>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="b-run">③ 自动答题（整卷）</button>
+      <button class="warn" id="b-pause">⏸ 暂停</button>
+      <button id="b-page">只答本页</button>
+      <button class="danger" id="b-stop">⏹ 停止</button>
+      <select id="sel-human">
+        <option value="1">拟人节奏 3–10 秒</option>
+        <option value="0">全速（不等待）</option>
+      </select>
+    </div>
+    <div class="hint">脚本永不点「交卷」，最后一步永远由你自己确认。</div>
+  </div>
+
+  <div class="card">
+    <h2>日志</h2>
+    <div id="log">等待操作…</div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, body) => {
+  const opt = body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {})
+  };
+  const r = await fetch(path, opt);
+  return r.json();
+};
+let logLines = [];
+function log(m) {
+  const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  logLines.push('[' + t + '] ' + m);
+  if (logLines.length > 400) logLines = logLines.slice(-300);
+  const el = $('#log');
+  el.textContent = logLines.join('\n');
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStep(n, done) {
+  const el = $('#st' + n);
+  if (el) el.classList.toggle('done', !!done);
+}
+
+async function refresh() {
+  try {
+    const h = await api('/api/health');
+    $('#s-rows').textContent = h.rows + ' 题';
+    const b = h.browser || {};
+    $('#s-browser').innerHTML = b.ok
+      ? '<span class="dot ok"></span>' + (b.browser || '已连接')
+      : '<span class="dot bad"></span>未启动';
+    if (b.ok) setStep(1, true);
+    if (h.page) {
+      $('#s-page').textContent = (h.page.title || '').slice(0, 40) + '  ' + (h.page.url || '').slice(0, 90);
+      if (/exam|paper|answer|question/i.test(h.page.url || '')) setStep(2, true);
+    } else {
+      $('#s-page').textContent = '—';
+    }
+    if (b.ok) {
+      const st = await api('/api/status');
+      const s = st.status;
+      if (s) {
+        $('#s-inject').innerHTML = '<span class="dot ok"></span>已注入 v2.0.0';
+        setStep(3, true);
+        $('#s-progress').textContent = (s.running ? '运行中 ' : '空闲 ') + '已答 ' + (s.done || 0) + ' 题';
+        if (s.log) {
+          const last = s.log.slice(-8).map(x => x.m);
+          if (last.length) {
+            const cur = logLines.slice(-last.length);
+            if (JSON.stringify(cur) !== JSON.stringify(last)) last.forEach(m => log(m));
+          }
+        }
+      } else {
+        $('#s-inject').innerHTML = '<span class="dot idle"></span>未注入';
+      }
+    }
+  } catch (e) { /* 服务未就绪 */ }
+}
+
+$('#b-start').onclick = async () => {
+  $('#b-start').disabled = true;
+  log('正在启动浏览器…');
+  const r = await api('/api/browser/start', { url: 'about:blank' });
+  log(r.msg || (r.ok ? '已启动' : '启动失败'));
+  $('#b-start').disabled = false;
+  refresh();
+};
+$('#b-inject').onclick = async () => {
+  log('注入脚本…');
+  const r = await api('/api/inject');
+  log(r.ok ? ('注入成功：' + (r.title || '') + ' ' + (r.url || '')) : ('注入失败：' + (r.why || '')));
+  const d = await api('/api/diagnose');
+  if (d.ok && d.diag) log('诊断：题目块 ' + d.diag.blocks + ' 个，下一题按钮 ' + d.diag.next + ' 个' + (d.diag.first ? ('，首题[' + d.diag.first.type + '] ' + d.diag.first.stem) : ''));
+  refresh();
+};
+$('#b-diag').onclick = async () => {
+  const d = await api('/api/diagnose');
+  if (!d.ok) return log('诊断失败：' + (d.why || ''));
+  const g = d.diag || {};
+  log('诊断 → 题目块 ' + (g.blocks ?? '?') + ' / 下一题 ' + (g.next ?? '?') + ' ("' + (g.nextLabel || '') + '") / 已答 ' + (g.done ?? 0));
+  if (g.first) log('  首题[' + g.first.type + '] ' + g.first.stem + '  选项 ' + g.first.opts);
+};
+$('#b-close').onclick = async () => { const r = await api('/api/browser/close'); log(r.msg || '已关闭'); refresh(); };
+$('#b-run').onclick = async () => {
+  const human = $('#sel-human').value === '1';
+  log('开始自动答题（拟人节奏' + (human ? '开' : '关') + '）…');
+  const r = await api('/api/run', { human });
+  if (!r.ok) log('启动失败：' + (r.why || ''));
+  else setStep(4, true);
+  refresh();
+};
+$('#b-stop').onclick = async () => { await api('/api/stop'); log('已停止'); refresh(); };
+$('#b-pause').onclick = async () => {
+  const cur = $('#b-pause').textContent.includes('暂停');
+  const r = await api('/api/pause', { on: cur });
+  $('#b-pause').textContent = r.paused ? '▶ 继续' : '⏸ 暂停';
+  log(r.paused ? '已暂停' : '已继续');
+};
+$('#b-page').onclick = async () => {
+  log('只答本页…');
+  const r = await api('/api/answer-current');
+  if (!r.ok) return log('失败：' + (r.why || ''));
+  (r.result || []).forEach(x => log('  ' + x.answer + ' ' + x.source + ' filled=' + x.filled + '  ' + x.stem));
+};
+refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>
